@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Room of Lies</title>
+  <style>
+    body { font-family: Arial; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
+   .room { border: 2px solid #16213e; padding: 20px; margin: 20px; border-radius: 10px; }
+    button { padding: 10px 20px; margin: 5px; background: #0f3460; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #e94560; }
+    button.active { background: #e94560; }
+    #gameChat { background: #16213e; padding: 15px; margin-top: 20px; border-radius: 10px; }
+    #teamMessages, #generalMessages { height: 250px; overflow-y: scroll; background: #0f3460; padding: 10px; text-align: left; border-radius: 5px; }
+    input { padding: 8px; margin: 5px; width: 60%; border-radius: 5px; border: none; }
+    #phase { color: #e94560; font-size: 20px; }
+    #teamMicBtn { background: #e94560; }
+  </style>
+</head>
+<body>
+  <h1>🏠 Room of Lies</h1>
+
+  <div id="lobby">
+    <input id="name" placeholder="Your Name">
+    <input id="roomCode" placeholder="Room Code">
+    <button onclick="joinRoom()">Join Private Room</button>
+    <br>
+    <button onclick="quickPlay()">⚡ Quick Play - Public Lobby</button>
+    <button onclick="createRoom()">Create New Room</button>
+    <div id="players"></div>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+
+  <div id="game" style="display:none">
+    <h2 id="role"></h2>
+    <h3 id="phase">Waiting...</h3>
+
+    <div id="gameChat">
+      <button id="teamTabBtn" onclick="showTab('team')">Team Chat</button>
+      <button id="generalTabBtn" onclick="showTab('general')">General Chat</button>
+
+      <div id="teamTab">
+        <h4 id="chatTitle">💬 Team Chat</h4>
+        <div id="teamMessages"></div>
+        <input id="teamInput" placeholder="Message your team...">
+        <button onclick="sendTeamMsg()">Send</button>
+        <br>
+        <button id="teamMicBtn" onclick="toggleTeamMic()">🎤 Join Team Voice</button>
+        <p id="voiceStatus"></p>
+      </div>
+
+      <div id="generalTab" style="display:none">
+        <h4>📢 General Chat - Everyone</h4>
+        <div id="generalMessages"></div>
+        <input id="generalInput" placeholder="Message everyone...">
+        <button onclick="sendGeneralMsg()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let roomCode, name;
+    let myRole = '', myTeam = '';
+    let currentTab = 'team';
+    let micOn = false;
+
+    function joinRoom() {
+      name = document.getElementById('name').value;
+      roomCode = document.getElementById('roomCode').value;
+      socket.emit('joinRoom', roomCode, name);
+    }
+
+    function quickPlay() {
+      name = document.getElementById('name').value;
+      roomCode = 'PUBLIC';
+      socket.emit('joinRoom', 'PUBLIC', name);
+      alert('Joined Public Lobby!');
+    }
+
+    function createRoom() {
+      roomCode = Math.random().toString(36).substr(2,4).toUpperCase();
+      document.getElementById('roomCode').value = roomCode;
+      alert('Room Code: ' + roomCode);
+    }
+
+    function startGame() {
+      socket.emit('startGame', roomCode);
+    }
+
+    function showTab(tab) {
+      currentTab = tab;
+      document.getElementById('teamTab').style.display = tab === 'team'? 'block' : 'none';
+      document.getElementById('generalTab').style.display = tab === 'general'? 'block' : 'none';
+      document.getElementById('teamTabBtn').classList.toggle('active', tab === 'team');
+      document.getElementById('generalTabBtn').classList.toggle('active', tab === 'general');
+    }
+
+    function sendTeamMsg() {
+      let msg = document.getElementById('teamInput').value;
+      if(msg.trim() === '') return;
+      socket.emit('teamMsg', roomCode, myTeam, name + ': ' + msg);
+      document.getElementById('teamInput').value = '';
+    }
+
+    function sendGeneralMsg() {
+      let msg = document.getElementById('generalInput').value;
+      if(msg.trim() === '') return;
+      socket.emit('generalMsg', roomCode, name + ': ' + msg);
+      document.getElementById('generalInput').value = '';
+    }
+
+    function toggleTeamMic() {
+      micOn =!micOn;
+      if(micOn) {
+        document.getElementById('teamMicBtn').innerText = '🔇 Leave Team Voice';
+        document.getElementById('voiceStatus').innerText = 'Voice: On - Team only';
+        socket.emit('joinTeamVoice', roomCode, myTeam);
+      } else {
+        document.getElementById('teamMicBtn').innerText = '🎤 Join Team Voice';
+        document.getElementById('voiceStatus').innerText = '';
+      }
+    }
+
+    socket.on('roomUpdate', (players) => {
+      document.getElementById('players').innerHTML = 'Players: ' + players.map(p => p.name).join(', ');
+    });
+
+    socket.on('role', (role, team) => {
+      myRole = role; myTeam = team;
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('game').style.display = 'block';
+      document.getElementById('role').innerText = 'You are: ' + role;
+      document.getElementById('chatTitle').innerText = '💬 ' + team + ' Chat';
+      showTab('team');
+    });
+
+    socket.on('phaseUpdate', (msg) => {
+      document.getElementById('phase').innerText = msg;
+      if(msg.includes('GENERAL')) showTab('general');
+    });
+
+    socket.on('teamChat', (msg) => {
+      document.getElementById('teamMessages').innerHTML += '<p>' + msg + '</p>';
+    });
+
+    socket.on('generalChat', (msg) => {
+      document.getElementById('generalMessages').innerHTML += '<p>' + msg + '</p>';
+    });
+
+    socket.on('teamPing', (msg) => {
+      alert('🔔 ' + msg);
+    });
+  </script>
+</body>
+</html>
