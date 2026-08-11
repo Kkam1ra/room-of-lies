@@ -3,6 +3,10 @@ const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
+  cors: {
+    origin:"*",
+    methods: ["GET", "POST"]
+  }
   transports: ['websocket', 'polling']
 });
 app.use(express.static('public'));
